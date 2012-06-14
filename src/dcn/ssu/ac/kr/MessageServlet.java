@@ -66,14 +66,24 @@ public class MessageServlet extends HttpServlet{
 		try {
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", room_key));
 			String user = req.getParameter("u");
-			String otherUser = RoomManagement.getOtherUser(room, user);
+			String[] otherUser = RoomManagement.getOtherUser(room, user);
+			int a;
 			if(otherUser != null) {
-				if(otherUser.equals(user)) {
+				/*if(otherUser.equals(user)) {
 					message = message.replace("\"OFFER\"", "\"ANSWER\",\n   \"answererSessionId\" : \"1\"");
 					message = message.replace("a=crypto:0 AES_CM_128_HMAC_SHA1_32", "a=xrypto:0 AES_CM_128_HMAC_SHA1_32");
-				}
+				}*/
+				int idxStart = message.indexOf("to:");
+				int idxEnd = message.indexOf(" ", idxStart);
+				String to = message.substring(idxStart + 3, idxEnd);
 				ChannelService channelService = ChannelServiceFactory.getChannelService();
-				channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser, message));
+				if(!to.equalsIgnoreCase("undefined"))
+					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + to, message));
+				else{
+					for(int i = 0; i < otherUser.length; i++)
+						if(otherUser[i] != null)
+							channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser[i], message));
+				}
 			}
 		} catch (EntityNotFoundException e) {
 			// TODO Auto-generated catch block
