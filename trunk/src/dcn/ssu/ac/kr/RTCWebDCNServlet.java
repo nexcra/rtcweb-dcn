@@ -65,7 +65,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		Entity room;
 		try {
 			room = dataStore.get(KeyFactory.createKey("Room", room_key));
-			if(RoomManagement.getOccupancy(room) == 1 && !debug.equals("full")) {
+			if(RoomManagement.getOccupancy(room) <= 2 && !debug.equals("full")) {
 				user = get_random(8);
 				RoomManagement.addUser(room, user);
 				initiator = 1;

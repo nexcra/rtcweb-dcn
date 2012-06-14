@@ -76,10 +76,15 @@
 <script type="text/javascript">
   var localVideo;
   var remoteVideo;
+  var remoteVideo2;
   var localStream;
   var channel;
   var channelReady = false;
-  var pc;
+  var pc1;
+  var pc2;
+  var user1;
+  var user2;
+  var tmp_user;
   var initiator = {{ initiator }};
   var started = false;
 
@@ -87,6 +92,7 @@
     console.log("Initializing; room={{ room_key }}.");
     localVideo = document.getElementById("localVideo");
     remoteVideo = document.getElementById("remoteVideo");
+	remoteVideo2 = document.getElementById("remoteVideo2");
     status = document.getElementById("status");
     resetStatus();
     openChannel();
@@ -131,15 +137,39 @@
     }
   }
 
-  createPeerConnection = function() {
+  createPeerConnection = function(user) {
     try {
-      pc = new webkitDeprecatedPeerConnection("{{ pc_config }}",
+	  if(user == null || user1 == user){
+		if(pc1 == undefined){ 
+			pc1 = new webkitDeprecatedPeerConnection("{{ pc_config }}",
                                               onSignalingMessage);
+			pc1.onconnecting = onSessionConnecting;
+			pc1.onopen = onSessionOpened;
+			pc1.onaddstream = onRemoteStreamAdded;
+			pc1.onremovestream = onRemoteStreamRemoved;
+			pc1.addStream(localStream);
+		}
+	  }
+	  if(user != null && user2 == user){
+	  
+		if(pc2 == undefined){
+			console.log('Create pc2');
+			pc2 = new webkitDeprecatedPeerConnection("{{ pc_config }}",
+                                              onSignalingMessage);
+			pc2.onconnecting = onSessionConnecting;
+			pc2.onopen = onSessionOpened;
+			pc2.onaddstream = onRemoteStreamAdded;
+			pc2.onremovestream = onRemoteStreamRemoved;
+			pc2.addStream(localStream);
+		}
+	  }
       console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
     } catch (e) {
       console.log("Failed to create webkitDeprecatedPeerConnection, exception: " + e.message);
       try {
-        pc = new webkitPeerConnection("{{ pc_config }}",
+        pc1 = new webkitPeerConnection("{{ pc_config }}",
+                                      onSignalingMessage);
+		pc2 = new webkitPeerConnection("{{ pc_config }}",
                                       onSignalingMessage);
         console.log("Created webkitPeerConnnection with config \"{{pc_config}}\".");
       } catch (e) {
@@ -148,19 +178,18 @@
         return;
       }
     }
-    pc.onconnecting = onSessionConnecting;
-    pc.onopen = onSessionOpened;
-    pc.onaddstream = onRemoteStreamAdded;
-    pc.onremovestream = onRemoteStreamRemoved;
+
   }
 
-  maybeStart = function() {
-    if (!started && localStream && channelReady) {
+  maybeStart = function(user) {
+	console.log('enter maybestart');
+    if (localStream && channelReady) {
       setStatus("Connecting...");
       console.log("Creating PeerConnection.");
-      createPeerConnection();
+      createPeerConnection(user);
       console.log("Adding local stream.");
-      pc.addStream(localStream);
+      //pc1.addStream(localStream);
+	  //pc2.addStream(localStream);
       started = true;
     }
   }
@@ -169,30 +198,72 @@
     footer.innerHTML = state;
   }
 
-  sendMessage = function(path, message) {
-    console.log('C->S: ' + message);
+  sendMessage = function(parent,path, message) {
+    var information = 'from:' + '{{ me }}' + 'to:';
+	if(user1 == tmp_user){
+		information += user1;
+	}else{
+		if(user2 == tmp_user){
+			information += user2;
+		}
+	}
+	var newmessage = information + " " + message;
+    console.log('C->S: ' + newmessage);
     path += '?r={{ room_key }}' + '&u={{ me }}';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
-    xhr.send(message);
+    xhr.send(newmessage);
   }
 
   onChannelOpened = function() {
     console.log('Channel opened.');
     channelReady = true;
-    if (initiator) maybeStart();
+    if (initiator) maybeStart(null);
   }
   onChannelMessage = function(message) {
     console.log('S->C: ' + message.data);
     if (message.data != 'BYE') {
       if (message.data.indexOf("\"ERROR\"", 0) == -1) {
-        if (!initiator && !started) maybeStart();
-        pc.processSignalingMessage(message.data);
+        //if (!initiator && !started) maybeStart();
+		//ThoLe
+		var data = message.data;
+		console.log('Messag Type:' + (typeof data) );
+		var idx = data.search(" ");
+		var information = data.substring(0, idx);
+		data = data.substring(idx + 1, data.length);
+		var idxStart = information.search(":");
+		var idxEnd = information.search("to");
+		tmp_user = information.substring(idxStart + 1, idxEnd);
+		console.log('Received from ' + tmp_user);
+		if(user1 != tmp_user){
+			if(user1 == undefined){
+				user1 = tmp_user;
+			}else{
+				console.log('vao 2' + user2);
+				if(user2 == undefined){
+					user2 = tmp_user;
+				}
+			}
+		}
+		if(user1 == tmp_user){
+			console.log('user1: '+ user1 + 'process' + data);
+		    maybeStart(user1);
+			console.log('Data Type:' + (typeof data) );
+			pc1.processSignalingMessage(data);
+		}else{
+			if(user2 == tmp_user){
+				console.log('user2: ' + user2 + 'process' + data);
+				maybeStart(user2);
+				pc2.processSignalingMessage(data);
+			}
+		}
       }
     } else {
       console.log('Session terminated.');
       remoteVideo.src = null;
       remoteVideo.style.opacity = 0;
+	  remoteVideo2.src = null;
+      remoteVideo2.style.opacity = 0;
       initiator = 0;
       started = false;
       resetStatus();
@@ -219,7 +290,14 @@
   }
 
   onSignalingMessage = function(message) {
-    sendMessage('/message', message);
+	if(this	== pc1){
+		console.log('Enter user1');
+	}else{
+		if(this == pc2){
+			console.log('Enter user2');
+		}
+	}
+    sendMessage(this,'/message', message);
   }
   onSessionConnecting = function(message) {
     console.log("Session connecting.");
@@ -228,10 +306,20 @@
     console.log("Session opened.");
   }
   onRemoteStreamAdded = function(event) {
-    console.log("Remote stream added.");
-    var url = webkitURL.createObjectURL(event.stream);
-    remoteVideo.style.opacity = 1;
-    remoteVideo.src = url;
+    if(this == pc1){
+		console.log("Remote stream added to " + user1);
+		var url = webkitURL.createObjectURL(event.stream);
+		remoteVideo.style.opacity = 1;
+		remoteVideo.src = url;
+	}else{
+		if(this == pc2){
+			console.log("Remote stream added to " + user2);
+			var url = webkitURL.createObjectURL(event.stream);
+			remoteVideo2.style.opacity = 1;
+			remoteVideo2.src = url;
+		}
+	}
+    
     setStatus("<input type=\"button\" id=\"hangup\" value=\"Hang up\" onclick=\"onHangup()\" />");
   }
   onRemoteStreamRemoved = function(event) {
@@ -263,6 +351,13 @@
   </div>
   <div id="remote">
     <video width="100%" height="100%" id="remoteVideo" autoplay="autoplay"
+     style="opacity: 0;
+     -webkit-transition-property: opacity;
+     -webkit-transition-duration: 2s;">
+    </video>
+  </div>
+  <div id="remote2">
+    <video width="100%" height="100%" id="remoteVideo2" autoplay="autoplay"
      style="opacity: 0;
      -webkit-transition-property: opacity;
      -webkit-transition-duration: 2s;">

@@ -30,10 +30,11 @@ public class DisconnectServlet  extends HttpServlet{
 			String user1 = (String)room.getProperty("user1");
 			String user2 = (String)room.getProperty("user2");
 			if(user1.equals(user) || user2.equals(user)) {
-				String otherUser = RoomManagement.getOtherUser(room, user);
+				String[] otherUser = RoomManagement.getOtherUser(room, user);
 				RoomManagement.removeUser(room, user);
 				if(otherUser != null) {
-					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser, "BYE"));
+					for(int i = 0; i < otherUser.length; i++)
+					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser[i], "BYE"));
 				}
 			}
 		} catch (EntityNotFoundException e) {
