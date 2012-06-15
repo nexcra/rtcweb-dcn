@@ -85,9 +85,10 @@
   var user1;
   var user2;
   var tmp_user;
+  var lst_user = '{{ lst_user }}';
   var initiator = {{ initiator }};
   var started = false;
-
+  var index = 0;
   initialize = function() {
     console.log("Initializing; room={{ room_key }}.");
     localVideo = document.getElementById("localVideo");
@@ -186,7 +187,25 @@
     if (localStream && channelReady) {
       setStatus("Connecting...");
       console.log("Creating PeerConnection.");
-      createPeerConnection(user);
+	  if(user != null){
+		createPeerConnection(user);
+	  }else{
+	    if(lst_user == '')
+			createPeerConnection(user);
+		else{
+			var arr = lst_user.split(' ');
+		
+			if(index < arr.length){
+				user1 = arr[index];
+				tmp_user = arr[index];
+				console.log('send offer to user1 ' + user1);
+				createPeerConnection(arr[index]);
+				index++;
+			}
+			
+	
+		}
+	  }
       console.log("Adding local stream.");
       //pc1.addStream(localStream);
 	  //pc2.addStream(localStream);
@@ -197,22 +216,18 @@
   setStatus = function(state) {
     footer.innerHTML = state;
   }
+ 
+       
 
   sendMessage = function(parent,path, message) {
-    var information = 'from:' + '{{ me }}' + 'to:';
-	if(user1 == tmp_user){
-		information += user1;
-	}else{
-		if(user2 == tmp_user){
-			information += user2;
-		}
-	}
+    var information = 'from:' + '{{ me }}' + 'to:' + tmp_user;
 	var newmessage = information + " " + message;
     console.log('C->S: ' + newmessage);
     path += '?r={{ room_key }}' + '&u={{ me }}';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
     xhr.send(newmessage);
+	done = 'true';
   }
 
   onChannelOpened = function() {
@@ -250,6 +265,17 @@
 		    maybeStart(user1);
 			console.log('Data Type:' + (typeof data) );
 			pc1.processSignalingMessage(data);
+			var idx = data.search('\"messageType\" : \"OK\"');
+			if(idx != -1){
+				var arr = lst_user.split(' ');
+				if(lst_user != '' && index < arr.length){
+				user2 = arr[index];
+				tmp_user = arr[index];
+				console.log('send offer to user2 ' + user2);
+				createPeerConnection(arr[index]);
+				index++;
+				}
+			}
 		}else{
 			if(user2 == tmp_user){
 				console.log('user2: ' + user2 + 'process' + data);
@@ -311,6 +337,7 @@
 		var url = webkitURL.createObjectURL(event.stream);
 		remoteVideo.style.opacity = 1;
 		remoteVideo.src = url;
+		
 	}else{
 		if(this == pc2){
 			console.log("Remote stream added to " + user2);

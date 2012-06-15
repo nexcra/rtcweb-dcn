@@ -1,5 +1,7 @@
 package dcn.ssu.ac.kr;
 
+import java.util.ArrayList;
+
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 
@@ -8,14 +10,23 @@ public class RoomManagement {
 		String user1 = (String)room.getProperty("user1");
 		String user2 = (String)room.getProperty("user2");
 		String user3 = (String)room.getProperty("user3");
-		if(user.equals(user1))
-			return new String[]{user2,user3};
-		else if(user.equals(user2))
-			return new String[]{user1,user3};
-		else if(user.equals(user3)){
-			return new String[]{user1,user2};
+		ArrayList<String> arr =new ArrayList<String>();
+		if(user1 != null)
+			arr.add(user1);
+		if(user2 != null)
+			arr.add(user2);
+		if(user3 != null)
+			arr.add(user3);
+		if(user.equals(user1)){
+			arr.remove(user1);
 		}
-		return null;
+		else if(user.equals(user2))
+			arr.remove(user2);
+		else if(user.equals(user3)){
+			arr.remove(user3);
+		}
+		String[] arrStr = new String[arr.size()];
+		return (String[])arr.toArray(arrStr);
 	}
 	
 	public static void removeUser(Entity room, String user) {
