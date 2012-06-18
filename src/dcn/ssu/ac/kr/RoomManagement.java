@@ -6,7 +6,7 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 
 public class RoomManagement {
-	public static String[] getOtherUser(Entity room, String user) {
+	public static ArrayList<String> getOtherUser(Entity room, String user) {
 		String user1 = (String)room.getProperty("user1");
 		String user2 = (String)room.getProperty("user2");
 		String user3 = (String)room.getProperty("user3");
@@ -19,14 +19,12 @@ public class RoomManagement {
 			arr.add(user3);
 		if(user.equals(user1)){
 			arr.remove(user1);
-		}
-		else if(user.equals(user2))
+		} else if(user.equals(user2))
 			arr.remove(user2);
 		else if(user.equals(user3)){
 			arr.remove(user3);
 		}
-		String[] arrStr = new String[arr.size()];
-		return (String[])arr.toArray(arrStr);
+		return arr;
 	}
 	
 	public static void removeUser(Entity room, String user) {
