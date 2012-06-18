@@ -3,6 +3,7 @@ package dcn.ssu.ac.kr;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.CharBuffer;
+import java.util.ArrayList;
 import java.util.Random;
 
 import javax.servlet.http.*;
@@ -107,15 +108,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		ChannelService channelService = ChannelServiceFactory.getChannelService();
 		String token = channelService.createChannel(room_key + "/" + user);
 		String pc_config = make_pc_config(stunServer);
-		String lst_user = "";
-		String[] otherUser = RoomManagement.getOtherUser(room, user);
-		for(int i = 0; i < otherUser.length; i++){
-			if(otherUser[i] != null){
-				lst_user += otherUser[i];
-				if( (i + 1) < otherUser.length)
-					lst_user+= " ";
-			}
-		}
+		
 		FileReader reader = new FileReader("index-template");
 		CharBuffer buffer = CharBuffer.allocate(16384);
 		reader.read(buffer);
@@ -126,7 +119,6 @@ public class RTCWebDCNServlet extends HttpServlet {
 		index = index.replaceAll("\\{\\{ token \\}\\}", token);
 		index = index.replaceAll("\\{\\{ me \\}\\}", user);
 		index = index.replaceAll("\\{\\{ pc_config \\}\\}", pc_config);
-		index = index.replaceAll("\\{\\{ lst_user \\}\\}", lst_user);
 		resp.setContentType("text/html");
 		resp.getWriter().write(index);
 

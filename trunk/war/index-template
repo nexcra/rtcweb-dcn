@@ -2,6 +2,7 @@
 <html>
 <head>
 <link rel="canonical" href="{{ room_link }}"/>
+<script src="/js/json/json2.js"></script>
 <script src="/_ah/channel/jsapi"></script>
 <!-- type="text/javascript">
   (function() {
@@ -80,15 +81,19 @@
   var localStream;
   var channel;
   var channelReady = false;
-  var pc1;
-  var pc2;
-  var user1;
-  var user2;
-  var tmp_user;
-  var lst_user = '{{ lst_user }}';
+
+  
+
   var initiator = {{ initiator }};
-  var started = false;
-  var index = 0;
+  var listOfParticipants;
+  var sdpBlobJSON;
+  var infoBlobJSON;		//store the previous sender to answer later
+  var listPeerConnection = new Array();
+  var pc;
+  var currentReceiver = '';
+  var curIdxPeerConnection = 0;
+  var tmp = 0;
+  
   initialize = function() {
     console.log("Initializing; room={{ room_key }}.");
     localVideo = document.getElementById("localVideo");
@@ -98,7 +103,6 @@
     resetStatus();
     openChannel();
     getUserMedia();
-    //createPeerConnection();
   }
 
   openChannel = function() {
@@ -138,40 +142,40 @@
     }
   }
 
-  createPeerConnection = function(user) {
+  setStatus = function(state) {
+    footer.innerHTML = state;
+  }
+ 
+ maybeStart = function(user) {
+	console.log('maybeStart');
+    if (localStream && channelReady) {
+    
+		createPeerConnection('');
+		console.log("Adding local stream.");
+		started = true;
+    }
+  }
+ 
+ 
+onChannelOpened = function() {
+    console.log('Channel opened.');
+    channelReady = true;
+    if (initiator) maybeStart();
+  }
+ 
+  
+  
+
+createPeerConnection = function(endpoint) {
+	
     try {
-	  if(user == null || user1 == user){
-		if(pc1 == undefined){ 
-			pc1 = new webkitDeprecatedPeerConnection("{{ pc_config }}",
-                                              onSignalingMessage);
-			pc1.onconnecting = onSessionConnecting;
-			pc1.onopen = onSessionOpened;
-			pc1.onaddstream = onRemoteStreamAdded;
-			pc1.onremovestream = onRemoteStreamRemoved;
-			pc1.addStream(localStream);
-		}
-	  }
-	  if(user != null && user2 == user){
-	  
-		if(pc2 == undefined){
-			console.log('Create pc2');
-			pc2 = new webkitDeprecatedPeerConnection("{{ pc_config }}",
-                                              onSignalingMessage);
-			pc2.onconnecting = onSessionConnecting;
-			pc2.onopen = onSessionOpened;
-			pc2.onaddstream = onRemoteStreamAdded;
-			pc2.onremovestream = onRemoteStreamRemoved;
-			pc2.addStream(localStream);
-		}
-	  }
-      console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
+	  	pc = new webkitDeprecatedPeerConnection("{{ pc_config }}", onSignalingMessage);
+      	console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
     } catch (e) {
       console.log("Failed to create webkitDeprecatedPeerConnection, exception: " + e.message);
       try {
-        pc1 = new webkitPeerConnection("{{ pc_config }}",
-                                      onSignalingMessage);
-		pc2 = new webkitPeerConnection("{{ pc_config }}",
-                                      onSignalingMessage);
+		pc = new webkitPeerConnection("{{ pc_config }}", onSignalingMessage);
+
         console.log("Created webkitPeerConnnection with config \"{{pc_config}}\".");
       } catch (e) {
         console.log("Failed to create webkitPeerConnection, exception: " + e.message);
@@ -179,109 +183,93 @@
         return;
       }
     }
-
-  }
-
-  maybeStart = function(user) {
-	console.log('enter maybestart');
-    if (localStream && channelReady) {
-      setStatus("Connecting...");
-      console.log("Creating PeerConnection.");
-	  if(user != null){
-		createPeerConnection(user);
-	  }else{
-	    if(lst_user == '')
-			createPeerConnection(user);
-		else{
-			var arr = lst_user.split(' ');
-		
-			if(index < arr.length){
-				user1 = arr[index];
-				tmp_user = arr[index];
-				console.log('send offer to user1 ' + user1);
-				createPeerConnection(arr[index]);
-				index++;
-			}
-			
+    currentReceiver = endpoint;
+    	pc.onconnecting = onSessionConnecting;
+		pc.onopen = onSessionOpened;
+		pc.onaddstream = onRemoteStreamAdded;
+		pc.onremovestream = onRemoteStreamRemoved;
+		pc.addStream(localStream);
+	if(endpoint != '') {
+		listPeerConnection[endpoint] = pc;
+   }
+    return pc;
+ }
+sendMessage = function(parent,path, message) {
+	console.log('C -> S \n' + message + '\n');
+	var pad = '';
+	if(currentReceiver != '') {
+		pad = '&receiver=' + currentReceiver
+	}
+		path += '?r={{ room_key }}' + '&sender={{ me }}' + pad;
 	
-		}
-	  }
-      console.log("Adding local stream.");
-      //pc1.addStream(localStream);
-	  //pc2.addStream(localStream);
-      started = true;
-    }
-  }
-
-  setStatus = function(state) {
-    footer.innerHTML = state;
-  }
- 
-       
-
-  sendMessage = function(parent,path, message) {
-    var information = 'from:' + '{{ me }}' + 'to:' + tmp_user;
-	var newmessage = information + " " + message;
-    console.log('C->S: ' + newmessage);
-    path += '?r={{ room_key }}' + '&u={{ me }}';
+	console.log(path + '\r\n');
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
-    xhr.send(newmessage);
+    xhr.send(message);
 	done = 'true';
   }
-
-  onChannelOpened = function() {
-    console.log('Channel opened.');
-    channelReady = true;
-    if (initiator) maybeStart(null);
-  }
+  
   onChannelMessage = function(message) {
     console.log('S->C: ' + message.data);
     if (message.data != 'BYE') {
       if (message.data.indexOf("\"ERROR\"", 0) == -1) {
-        //if (!initiator && !started) maybeStart();
-		//ThoLe
-		var data = message.data;
-		console.log('Messag Type:' + (typeof data) );
-		var idx = data.search(" ");
-		var information = data.substring(0, idx);
-		data = data.substring(idx + 1, data.length);
-		var idxStart = information.search(":");
-		var idxEnd = information.search("to");
-		tmp_user = information.substring(idxStart + 1, idxEnd);
-		console.log('Received from ' + tmp_user);
-		if(user1 != tmp_user){
-			if(user1 == undefined){
-				user1 = tmp_user;
-			}else{
-				console.log('vao 2' + user2);
-				if(user2 == undefined){
-					user2 = tmp_user;
+        
+		var content = message.data;
+		
+		// a response from server is a list of participant, which format is: PARTICIPANTS user1 user2 ...
+		if(content.indexOf("PARTICIPANTS") != -1) {
+			content = content.replace('\r\n', '');
+			var idx = content.search(' ');		
+			var str = content.substring(idx+1);
+			
+			listOfParticipants = str.split(' ');
+			
+			listPeerConnection[listOfParticipants[0]] = pc;
+			
+			//if 1, it means the previous OFFER has sent already by server => do nothing
+			if(listOfParticipants.length == 1) {
+				//do nothing
+				
+			} else if(listOfParticipants.length > 1) {
+			}
+		} else {
+		//INFO{...}
+			var infoBlob = content.substring(content.indexOf('INFO'), content.indexOf('}') + 1);
+			
+			var idx1 = infoBlob.indexOf('{');
+			var idx2 = infoBlob.indexOf('}');
+			
+			infoBlobJSON = JSON.parse(infoBlob.substring(idx1, idx2+1));
+			console.log("sender -----" + infoBlobJSON.sender);
+
+		//SDP{...}			
+			var sdpBlob = content.substring(content.indexOf('SDP'));
+			
+			var idx3 =sdpBlob.indexOf('{');
+			var idx4 = sdpBlob.indexOf('}');
+
+			sdpBlobJSON = JSON.parse(sdpBlob.substring(idx3, idx4 + 1));
+			console.log("messageType -----" + sdpBlobJSON.messageType);
+			
+			currentReceiver = infoBlobJSON.sender;
+			
+			if(sdpBlobJSON.messageType == 'OFFER' && initiator == 0) {
+				createPeerConnection(infoBlobJSON.sender);
+				tmp ++;
+			}
+			
+			listPeerConnection[infoBlobJSON.sender].processSignalingMessage(sdpBlob);
+			
+			if(sdpBlob.messageType == 'OK' && initiator != 0) {
+				if(listOfParticipants.length > 1) {
+					curIdxPeerConnection++;
+					if(curIdxPeerConnection < listOfParticipants.length) {
+						currentReceiver = listOfParticipants[curIdxPeerConnection];
+						createPeerConnection(currentReceiver);
+					}
 				}
 			}
-		}
-		if(user1 == tmp_user){
-			console.log('user1: '+ user1 + 'process' + data);
-		    maybeStart(user1);
-			console.log('Data Type:' + (typeof data) );
-			pc1.processSignalingMessage(data);
-			var idx = data.search('\"messageType\" : \"OK\"');
-			if(idx != -1){
-				var arr = lst_user.split(' ');
-				if(lst_user != '' && index < arr.length){
-				user2 = arr[index];
-				tmp_user = arr[index];
-				console.log('send offer to user2 ' + user2);
-				createPeerConnection(arr[index]);
-				index++;
-				}
-			}
-		}else{
-			if(user2 == tmp_user){
-				console.log('user2: ' + user2 + 'process' + data);
-				maybeStart(user2);
-				pc2.processSignalingMessage(data);
-			}
+			
 		}
       }
     } else {
@@ -316,13 +304,6 @@
   }
 
   onSignalingMessage = function(message) {
-	if(this	== pc1){
-		console.log('Enter user1');
-	}else{
-		if(this == pc2){
-			console.log('Enter user2');
-		}
-	}
     sendMessage(this,'/message', message);
   }
   onSessionConnecting = function(message) {
@@ -332,21 +313,19 @@
     console.log("Session opened.");
   }
   onRemoteStreamAdded = function(event) {
-    if(this == pc1){
-		console.log("Remote stream added to " + user1);
-		var url = webkitURL.createObjectURL(event.stream);
-		remoteVideo.style.opacity = 1;
-		remoteVideo.src = url;
-		
-	}else{
-		if(this == pc2){
-			console.log("Remote stream added to " + user2);
-			var url = webkitURL.createObjectURL(event.stream);
-			remoteVideo2.style.opacity = 1;
-			remoteVideo2.src = url;
-		}
-	}
     
+		var url = webkitURL.createObjectURL(event.stream);
+
+		if(tmp == 0){
+		
+			remoteVideo.style.opacity = 1;
+			remoteVideo.src = url;
+		 } else {
+		 remoteVideo2.style.opacity = 1;
+			remoteVideo2.src = url;
+		 }
+		
+	
     setStatus("<input type=\"button\" id=\"hangup\" value=\"Hang up\" onclick=\"onHangup()\" />");
   }
   onRemoteStreamRemoved = function(event) {
@@ -357,10 +336,10 @@
     console.log("Hanging up.");
     localVideo.style.opacity = 0;
     remoteVideo.style.opacity = 0;
-    pc.close();
+    
     // will trigger BYE from server
     socket.close();
-    pc = null;
+    
     socket = null;
     setStatus("You have left the call. <a href=\"{{ room_link }}\">Click here</a> to rejoin.");
   }

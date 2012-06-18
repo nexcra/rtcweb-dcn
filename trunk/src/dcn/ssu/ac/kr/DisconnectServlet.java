@@ -1,6 +1,7 @@
 package dcn.ssu.ac.kr;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -30,15 +31,14 @@ public class DisconnectServlet  extends HttpServlet{
 			String user1 = (String)room.getProperty("user1");
 			String user2 = (String)room.getProperty("user2");
 			if(user1.equals(user) || user2.equals(user)) {
-				String[] otherUser = RoomManagement.getOtherUser(room, user);
+				ArrayList<String> otherUser = RoomManagement.getOtherUser(room, user);
 				RoomManagement.removeUser(room, user);
 				if(otherUser != null) {
-					for(int i = 0; i < otherUser.length; i++)
-					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser[i], "BYE"));
+					for(String u : otherUser)
+					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + u, "BYE"));
 				}
 			}
 		} catch (EntityNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}

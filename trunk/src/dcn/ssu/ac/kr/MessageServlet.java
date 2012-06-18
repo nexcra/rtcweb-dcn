@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.servlet.http.HttpServlet;
@@ -23,72 +24,79 @@ import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.datastore.Query;
 
+import dcn.ssu.ac.kr.message.Message;
+
 
 @SuppressWarnings("serial")
 public class MessageServlet extends HttpServlet{
 
+	Message mROAPMessage;
 
 	@Override
 	public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		StringBuilder stringBuilder = new StringBuilder();
 		BufferedReader bufferedReader = null;
 		try {
-		  InputStream inputStream = req.getInputStream();
-		  if (inputStream != null) {
-		   bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-		   char[] charBuffer = new char[128];
-		   int bytesRead = -1;
-		   while ((bytesRead = bufferedReader.read(charBuffer)) > 0) {
-		    stringBuilder.append(charBuffer, 0, bytesRead);
-		   }
-		  } else {
-		   stringBuilder.append("");
-		  }
+			InputStream inputStream = req.getInputStream();
+			if (inputStream != null) {
+				bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+				char[] charBuffer = new char[128];
+				int bytesRead = -1;
+				while ((bytesRead = bufferedReader.read(charBuffer)) > 0) {
+					stringBuilder.append(charBuffer, 0, bytesRead);
+				}
+			} else {
+				stringBuilder.append("");
+			}
 		} catch (IOException ex) {
-		  throw ex;
+			throw ex;
 		} finally {
-		  if (bufferedReader != null) {
-		   try {
-		    bufferedReader.close();
-		   } catch (IOException ex) {
-		    throw ex;
-		   }
-		  }
+			if (bufferedReader != null) {
+				try {
+					bufferedReader.close();
+				} catch (IOException ex) {
+					throw ex;
+				}
+			}
 		}
 		String message = stringBuilder.toString();
 		String room_key = req.getParameter("r");
-		
-//		
-//		ChannelPresence presence = channelService.parsePresence(req);
-//		String key = presence.clientId();
-//		String str[] = key.split("/");
-//		String user = str[1];
+
 		try {
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", room_key));
-			String user = req.getParameter("u");
-			String[] otherUser = RoomManagement.getOtherUser(room, user);
-			int a;
-			if(otherUser != null) {
-				/*if(otherUser.equals(user)) {
-					message = message.replace("\"OFFER\"", "\"ANSWER\",\n   \"answererSessionId\" : \"1\"");
-					message = message.replace("a=crypto:0 AES_CM_128_HMAC_SHA1_32", "a=xrypto:0 AES_CM_128_HMAC_SHA1_32");
-				}*/
-				int idxStart = message.indexOf("to:");
-				int idxEnd = message.indexOf(" ", idxStart);
-				String to = message.substring(idxStart + 3, idxEnd);
-				ChannelService channelService = ChannelServiceFactory.getChannelService();
-				if(!to.equalsIgnoreCase("undefined"))
-					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + to, message));
-				else{
-					for(int i = 0; i < otherUser.length; i++)
-						if(otherUser[i] != null)
-							channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser[i], message));
+			
+			String sender = req.getParameter("sender");
+			String receiver = req.getParameter("receiver");
+			
+			mROAPMessage = new Message(message, sender, receiver);
+			ArrayList<String> otherUser = RoomManagement.getOtherUser(room, sender);
+			ChannelService channelService = ChannelServiceFactory.getChannelService();
+			
+			if(otherUser.size() > 0) {
+				//how to determine this is the first time to return a list of ongoing participants???
+				if(receiver == null) { 		//the first offer from newcomer
+					if(mROAPMessage.isOffer()) {	//new client join and send offer by creating peerconnection
+						//return list of current participants
+						String listOfParticipants = "PARTICIPANTS ";
+						for(String u : otherUser) {
+							listOfParticipants += u + " ";
+						}
+						listOfParticipants = listOfParticipants.trim();
+						//response the newcomer with a list of participants
+						channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + sender, listOfParticipants));		
+						//forward the offer to the first initiator
+						channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser.get(0), mROAPMessage.getFullMessage()));		
+
+					}
+
+				} else {
+					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + receiver, mROAPMessage.getFullMessage()));
 				}
 			}
+
 		} catch (EntityNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+
 	}
 }
