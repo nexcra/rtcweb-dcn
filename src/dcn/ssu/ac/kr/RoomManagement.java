@@ -7,64 +7,53 @@ import com.google.appengine.api.datastore.Entity;
 
 public class RoomManagement {
 	public static ArrayList<String> getOtherUser(Entity room, String user) {
-		String user1 = (String)room.getProperty("user1");
-		String user2 = (String)room.getProperty("user2");
-		String user3 = (String)room.getProperty("user3");
+		
 		ArrayList<String> arr =new ArrayList<String>();
-		if(user1 != null)
-			arr.add(user1);
-		if(user2 != null)
-			arr.add(user2);
-		if(user3 != null)
-			arr.add(user3);
-		if(user.equals(user1)){
-			arr.remove(user1);
-		} else if(user.equals(user2))
-			arr.remove(user2);
-		else if(user.equals(user3)){
-			arr.remove(user3);
+		
+		Integer NoU = new Integer((String)room.getProperty("NoU"));
+		int num = 1;
+		String userName = "user" + num;
+		for(int i = 0; i < NoU.intValue(); i++){
+			if(!user.equalsIgnoreCase((String)room.getProperty(userName)))
+				arr.add((String)room.getProperty(userName));
+			num++;
+			userName = "user" + num;
 		}
 		return arr;
 	}
 	
 	public static void removeUser(Entity room, String user) {
-		String user1 = (String)room.getProperty("user1");
-		String user2 = (String)room.getProperty("user2");
-		if(user.equals(user2)) {
-			user2 = null;
-		}
 		
-		if(user.equals(user1)) {
-			if(user2 != null) {
-				user1 = user2;
-				user2 = null;
-			} else {
-				user1 = null;
+		int num = 1;
+		String userName = "user" + num;
+		Integer NoU = new Integer((String)room.getProperty("NoU"));
+	
+		for(int i = 0; i < NoU.intValue(); i++){
+			if(user.equalsIgnoreCase((String)room.getProperty(userName))){
+				String lastUserName = "user"  + NoU.intValue();
+				room.setProperty(userName, (String)room.getProperty(lastUserName));
+				room.setProperty(lastUserName, null);
+				room.setProperty("NoU", (NoU.intValue() -1) + "");
+				break;
 			}
+			num++;
+			userName = "user" + num;
 		}
-		room.setProperty("user1", user1);
-		room.setProperty("user2", user2);
 	}
 	
 	public static void addUser(Entity entity, String user) {
-		if(entity.getProperty("user1") == null)
-			entity.setProperty("user1", user);
-		else if(entity.getProperty("user2") == null)
-			entity.setProperty("user2", user);
-		else if(entity.getProperty("user3") == null)
-			entity.setProperty("user3", user);
+		String strNoU = (String)entity.getProperty("NoU");
+		int num = (new Integer(strNoU)).intValue() + 1;
+		String userName = "user" + num;
+		entity.setProperty(userName, user);
+		//get current number of user and plus 1
+		entity.setProperty("NoU", num + "");
+		
 		DatastoreServiceFactory.getDatastoreService().put(entity);
 	}
 	
 	public static int getOccupancy(Entity entity) {
-		int occupancy = 0;
-		if(entity.getProperty("user1") != null)
-			occupancy += 1;
-		
-		if(entity.getProperty("user2") != null)
-			occupancy += 1;
-		if(entity.getProperty("user3") != null)
-			occupancy += 1;
-		return occupancy;
+		Integer NoU = new Integer((String)entity.getProperty("NoU"));
+		return NoU.intValue();
 	}
 }

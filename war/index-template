@@ -81,19 +81,16 @@
   var localStream;
   var channel;
   var channelReady = false;
-
-  
-
-  var initiator = {{ initiator }};
-  var listOfParticipants;
-  var sdpBlobJSON;
-  var infoBlobJSON;		//store the previous sender to answer later
-  var listPeerConnection = new Array();
   var pc;
-  var currentReceiver = '';
-  var curIdxPeerConnection = 0;
-  var tmp = 0;
-  
+  var lstPeerConnection = new Array();
+  var lstUser = new Array();
+  var tmp_user;
+  var lst_user = '{{ lst_user }}';
+  var initiator = {{ initiator }};
+  var started = false;
+  var index = 0;
+  var tmp_message = '';
+  var receiver = 'false';
   initialize = function() {
     console.log("Initializing; room={{ room_key }}.");
     localVideo = document.getElementById("localVideo");
@@ -103,6 +100,7 @@
     resetStatus();
     openChannel();
     getUserMedia();
+    //createPeerConnection();
   }
 
   openChannel = function() {
@@ -142,40 +140,36 @@
     }
   }
 
-  setStatus = function(state) {
-    footer.innerHTML = state;
-  }
- 
- maybeStart = function(user) {
-	console.log('maybeStart');
-    if (localStream && channelReady) {
-    
-		createPeerConnection('');
-		console.log("Adding local stream.");
-		started = true;
-    }
-  }
- 
- 
-onChannelOpened = function() {
-    console.log('Channel opened.');
-    channelReady = true;
-    if (initiator) maybeStart();
-  }
- 
-  
-  
-
-createPeerConnection = function(endpoint) {
-	
+  createPeerConnection = function(user) {
     try {
-	  	pc = new webkitDeprecatedPeerConnection("{{ pc_config }}", onSignalingMessage);
-      	console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
+	  pc = lstPeerConnection[user];
+	  if(pc == undefined){
+		console.log('Create PeerConnection for user ' + user);
+		pc = new webkitDeprecatedPeerConnection("{{ pc_config }}",
+										  onSignalingMessage);
+		pc.onconnecting = onSessionConnecting;
+		pc.onopen = onSessionOpened;
+		pc.onaddstream = onRemoteStreamAdded;
+		pc.onremovestream = onRemoteStreamRemoved;
+		pc.addStream(localStream);
+		lstPeerConnection[user] = pc;
+	  }
+      console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
     } catch (e) {
       console.log("Failed to create webkitDeprecatedPeerConnection, exception: " + e.message);
       try {
-		pc = new webkitPeerConnection("{{ pc_config }}", onSignalingMessage);
-
+		pc = lstPeerConnection[user];
+		if(pc == undefined){
+			console.log('Create PeerConnection for user ' + user);
+			pc = new webkitPeerConnection("{{ pc_config }}",
+                                      onSignalingMessage);
+			pc.onconnecting = onSessionConnecting;
+			pc.onopen = onSessionOpened;
+			pc.onaddstream = onRemoteStreamAdded;
+			pc.onremovestream = onRemoteStreamRemoved;
+			pc.addStream(localStream);
+			lstPeerConnection[user] = pc;
+		}	
         console.log("Created webkitPeerConnnection with config \"{{pc_config}}\".");
       } catch (e) {
         console.log("Failed to create webkitPeerConnection, exception: " + e.message);
@@ -183,94 +177,127 @@ createPeerConnection = function(endpoint) {
         return;
       }
     }
-    currentReceiver = endpoint;
-    	pc.onconnecting = onSessionConnecting;
-		pc.onopen = onSessionOpened;
-		pc.onaddstream = onRemoteStreamAdded;
-		pc.onremovestream = onRemoteStreamRemoved;
-		pc.addStream(localStream);
-	if(endpoint != '') {
-		listPeerConnection[endpoint] = pc;
-   }
-    return pc;
- }
-sendMessage = function(parent,path, message) {
-	console.log('C -> S \n' + message + '\n');
-	var pad = '';
-	if(currentReceiver != '') {
-		pad = '&receiver=' + currentReceiver
-	}
-		path += '?r={{ room_key }}' + '&sender={{ me }}' + pad;
+	//add div for displaying remote stream
+	  var parent = document.getElementById('container');
+	  var child = document.getElementById(user);
+	  if(child == null){
+		  var newdiv = document.createElement('div');
+		  var divIdName = user;
+		  newdiv.setAttribute('id',divIdName);
+		  newdiv.innerHTML = '<video width=\"100%\" height=\"100%\" id=\"remoteVideo-'+ user +'\" autoplay=\"autoplay\" style=\"opacity: 0; -webkit-transition-property: opacity;-webkit-transition-duration: 2s;\"></video>';
+		  parent.appendChild(newdiv);
+	  }
+  }
+
+  maybeStart = function(user) {
+	console.log('enter maybestart');
+    if (localStream && channelReady) {
+      setStatus("Connecting...");
+      console.log("Creating PeerConnection.");
+	  if(user != null){
+		createPeerConnection(user);
+	  }else{
+	    if(lst_user == '')
+			createPeerConnection(user);
+		else{
+			var arr = lst_user.split(' ');
+			for(var i = 0; i < arr.length; i++){
+				if(lstUser[i] == undefined){
+					lstUser[i] = arr[i];
+					tmp_user = arr[i];
+				}
+				console.log('send offer to user ' + tmp_user);
+				createPeerConnection(arr[i]);
+			
+			}
 	
-	console.log(path + '\r\n');
+		}
+	  }
+      console.log("Adding local stream.");
+      //pc1.addStream(localStream);
+	  //pc2.addStream(localStream);
+      started = true;
+    }
+  }
+
+  setStatus = function(state) {
+    footer.innerHTML = state;
+  }
+ 
+       
+
+  sendMessage = function(parent,path, message) {
+    var information = 'from:' + '{{ me }}' + 'to:' + tmp_user;
+	if( message.search('\"messageType\" : \"OFFER\"') != -1 && message.search('\"seq\" : 1') != -1){
+		information = 'from:' + '{{ me }}' + 'to:' + lstUser[index];
+	}
+	var newmessage = information + " " + message;
+	var arr = lst_user.split(' ');
+	if(receiver == 'false'){
+		if(arr.length > 1 && index < arr.length){
+			tmp_message += newmessage;
+			if( (index + 1) < arr.length){
+				tmp_message += '*';
+			}
+			index++;
+			console.log('ThoLe ' + information + ' ' + index);
+			if(index < arr.length)
+				return;
+		}
+		if(arr.length > 1){
+			newmessage = tmp_message;
+		}
+	}
+    console.log('C->S: ' + newmessage);
+    path += '?r={{ room_key }}' + '&u={{ me }}';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
-    xhr.send(message);
+    xhr.send(newmessage);
 	done = 'true';
+	tmp_message = '';
+	index = 0;
   }
-  
+
+  onChannelOpened = function() {
+    console.log('Channel opened.');
+    channelReady = true;
+    if (initiator) maybeStart(null);
+  }
   onChannelMessage = function(message) {
     console.log('S->C: ' + message.data);
     if (message.data != 'BYE') {
       if (message.data.indexOf("\"ERROR\"", 0) == -1) {
-        
-		var content = message.data;
-		
-		// a response from server is a list of participant, which format is: PARTICIPANTS user1 user2 ...
-		if(content.indexOf("PARTICIPANTS") != -1) {
-			content = content.replace('\r\n', '');
-			var idx = content.search(' ');		
-			var str = content.substring(idx+1);
-			
-			listOfParticipants = str.split(' ');
-			
-			listPeerConnection[listOfParticipants[0]] = pc;
-			
-			//if 1, it means the previous OFFER has sent already by server => do nothing
-			if(listOfParticipants.length == 1) {
-				//do nothing
-				
-			} else if(listOfParticipants.length > 1) {
-			}
-		} else {
+        //if (!initiator && !started) maybeStart();
+		//ThoLe
+		var data = message.data;
+		console.log('Messag Type:' + (typeof data) );
 		//INFO{...}
-			var infoBlob = content.substring(content.indexOf('INFO'), content.indexOf('}') + 1);
-			
-			var idx1 = infoBlob.indexOf('{');
-			var idx2 = infoBlob.indexOf('}');
-			
-			infoBlobJSON = JSON.parse(infoBlob.substring(idx1, idx2+1));
-			console.log("sender -----" + infoBlobJSON.sender);
-
-		//SDP{...}			
-			var sdpBlob = content.substring(content.indexOf('SDP'));
-			
-			var idx3 =sdpBlob.indexOf('{');
-			var idx4 = sdpBlob.indexOf('}');
-
-			sdpBlobJSON = JSON.parse(sdpBlob.substring(idx3, idx4 + 1));
-			console.log("messageType -----" + sdpBlobJSON.messageType);
-			
-			currentReceiver = infoBlobJSON.sender;
-			
-			if(sdpBlobJSON.messageType == 'OFFER' && initiator == 0) {
-				createPeerConnection(infoBlobJSON.sender);
-				tmp ++;
-			}
-			
-			listPeerConnection[infoBlobJSON.sender].processSignalingMessage(sdpBlob);
-			
-			if(sdpBlob.messageType == 'OK' && initiator != 0) {
-				if(listOfParticipants.length > 1) {
-					curIdxPeerConnection++;
-					if(curIdxPeerConnection < listOfParticipants.length) {
-						currentReceiver = listOfParticipants[curIdxPeerConnection];
-						createPeerConnection(currentReceiver);
-					}
-				}
-			}
-			
+		var infoBlob = data.substring(data.indexOf('INFO'), data.indexOf('}') + 1);
+		var idx1 = infoBlob.indexOf('{');
+		var idx2 = infoBlob.indexOf('}');
+		infoBlobJSON = JSON.parse(infoBlob.substring(idx1, idx2+1));
+		console.log("sender -----" + infoBlobJSON.sender);
+		tmp_user = infoBlobJSON.sender;
+		console.log('Received from ' + tmp_user);
+		
+		//Find the sender in lstUser; if not exists, add this sender into lstUser
+		var i = 0;
+		while(i < lstUser.length){
+			if(lstUser[i] == tmp_user)
+				break;
+			i++;
 		}
+		if( i >= lstUser.length)
+			lstUser[i] = tmp_user;
+			
+		if( data.search('\"messageType\" : \"OFFER\"') != -1 && data.search('\"seq\" : 1') != -1){
+			receiver = 'true';
+		}
+		//SDP{...}			
+		var sdpBlob = data.substring(data.indexOf('SDP'));
+		console.log('user: '+ tmp_user + 'process' + sdpBlob);
+		maybeStart(lstUser[i]);
+		lstPeerConnection[lstUser[i]].processSignalingMessage(sdpBlob);
       }
     } else {
       console.log('Session terminated.');
@@ -314,18 +341,19 @@ sendMessage = function(parent,path, message) {
   }
   onRemoteStreamAdded = function(event) {
     
-		var url = webkitURL.createObjectURL(event.stream);
-
-		if(tmp == 0){
-		
+	for(var i = 0; i < lstUser.length; i++){
+		var user = lstUser[i];
+		var peerConnection = lstPeerConnection[user];
+		if(peerConnection == this){
+			var remoteVideo = document.getElementById("remoteVideo-" + user);
+			console.log("Remote stream added to " + user);
+			var url = webkitURL.createObjectURL(event.stream);
 			remoteVideo.style.opacity = 1;
 			remoteVideo.src = url;
-		 } else {
-		 remoteVideo2.style.opacity = 1;
-			remoteVideo2.src = url;
-		 }
-		
-	
+			break;
+		}
+	}
+    
     setStatus("<input type=\"button\" id=\"hangup\" value=\"Hang up\" onclick=\"onHangup()\" />");
   }
   onRemoteStreamRemoved = function(event) {
@@ -336,10 +364,10 @@ sendMessage = function(parent,path, message) {
     console.log("Hanging up.");
     localVideo.style.opacity = 0;
     remoteVideo.style.opacity = 0;
-    
+    pc.close();
     // will trigger BYE from server
     socket.close();
-    
+    pc = null;
     socket = null;
     setStatus("You have left the call. <a href=\"{{ room_link }}\">Click here</a> to rejoin.");
   }
@@ -351,20 +379,6 @@ sendMessage = function(parent,path, message) {
     <video
      width="100%" height="100%" id="localVideo" autoplay="autoplay"
      onclick="onClick()" style="opacity: 0;
-     -webkit-transition-property: opacity;
-     -webkit-transition-duration: 2s;">
-    </video>
-  </div>
-  <div id="remote">
-    <video width="100%" height="100%" id="remoteVideo" autoplay="autoplay"
-     style="opacity: 0;
-     -webkit-transition-property: opacity;
-     -webkit-transition-duration: 2s;">
-    </video>
-  </div>
-  <div id="remote2">
-    <video width="100%" height="100%" id="remoteVideo2" autoplay="autoplay"
-     style="opacity: 0;
      -webkit-transition-property: opacity;
      -webkit-transition-duration: 2s;">
     </video>

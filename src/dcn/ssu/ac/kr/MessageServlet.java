@@ -30,7 +30,7 @@ import dcn.ssu.ac.kr.message.Message;
 @SuppressWarnings("serial")
 public class MessageServlet extends HttpServlet{
 
-	Message mROAPMessage;
+	Message mROAPMessage = null;
 
 	@Override
 	public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -65,32 +65,43 @@ public class MessageServlet extends HttpServlet{
 		try {
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", room_key));
 			
-			String sender = req.getParameter("sender");
-			String receiver = req.getParameter("receiver");
+			String sender = req.getParameter("u");
 			
-			mROAPMessage = new Message(message, sender, receiver);
 			ArrayList<String> otherUser = RoomManagement.getOtherUser(room, sender);
-			ChannelService channelService = ChannelServiceFactory.getChannelService();
 			
 			if(otherUser.size() > 0) {
-				//how to determine this is the first time to return a list of ongoing participants???
-				if(receiver == null) { 		//the first offer from newcomer
-					if(mROAPMessage.isOffer()) {	//new client join and send offer by creating peerconnection
-						//return list of current participants
-						String listOfParticipants = "PARTICIPANTS ";
-						for(String u : otherUser) {
-							listOfParticipants += u + " ";
-						}
-						listOfParticipants = listOfParticipants.trim();
-						//response the newcomer with a list of participants
-						channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + sender, listOfParticipants));		
-						//forward the offer to the first initiator
-						channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser.get(0), mROAPMessage.getFullMessage()));		
-
+				if(message.indexOf("*") < 0){
+					int idxStart = message.indexOf("to:");
+					int idxEnd = message.indexOf(" ", idxStart);
+					String receiver = message.substring(idxStart + 3, idxEnd);
+					ChannelService channelService = ChannelServiceFactory.getChannelService();
+					message = message.substring(idxEnd + 1);
+					mROAPMessage = new Message(message, sender, receiver);
+					if(!receiver.equalsIgnoreCase("undefined"))
+						channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + receiver, mROAPMessage.getFullMessage()));
+					else{
+						for(int i = 0; i < otherUser.size(); i++)
+							if(otherUser.get(i) != null)
+								channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser.get(i), mROAPMessage.getFullMessage()));
 					}
-
-				} else {
-					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + receiver, mROAPMessage.getFullMessage()));
+				}else{
+					String[] arrMessage = message.split("\\*");
+					for(int j = 0; j < arrMessage.length; j++ ){
+						message = arrMessage[j];
+						int idxStart = message.indexOf("to:");
+						int idxEnd = message.indexOf(" ", idxStart);
+						String receiver = message.substring(idxStart + 3, idxEnd);
+						ChannelService channelService = ChannelServiceFactory.getChannelService();
+						message = message.substring(idxEnd + 1);
+						mROAPMessage = new Message(message, sender, receiver);
+						if(!receiver.equalsIgnoreCase("undefined"))
+							channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + receiver, mROAPMessage.getFullMessage()));
+						else{
+							for(int i = 0; i < otherUser.size(); i++)
+								if(otherUser.get(i) != null)
+									channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + otherUser.get(i), mROAPMessage.getFullMessage()));
+						}
+					}
 				}
 			}
 

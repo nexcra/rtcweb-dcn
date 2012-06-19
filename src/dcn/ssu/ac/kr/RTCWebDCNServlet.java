@@ -66,7 +66,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		Entity room = null;
 		try {
 			room = dataStore.get(KeyFactory.createKey("Room", room_key));
-			if(RoomManagement.getOccupancy(room) <= 2 && !debug.equals("full")) {
+			if(!debug.equals("full")) {
 				user = get_random(8);
 				RoomManagement.addUser(room, user);
 				initiator = 1;
@@ -84,6 +84,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 			if(!debug.equals("full")) {
 				user = get_random(8);
 				room = new Entity("Room", room_key);
+				room.setProperty("NoU", "0");
 				RoomManagement.addUser(room, user);
 				if(!debug.equals("loopback")) {
 					initiator = 0;
@@ -108,7 +109,15 @@ public class RTCWebDCNServlet extends HttpServlet {
 		ChannelService channelService = ChannelServiceFactory.getChannelService();
 		String token = channelService.createChannel(room_key + "/" + user);
 		String pc_config = make_pc_config(stunServer);
-		
+		String lst_user = "";
+		ArrayList<String> otherUser = RoomManagement.getOtherUser(room, user);
+		for(int i = 0; i < otherUser.size(); i++){
+			if(otherUser.get(i) != null){
+				lst_user += otherUser.get(i);
+				if( (i + 1) < otherUser.size())
+					lst_user+= " ";
+			}
+		}
 		FileReader reader = new FileReader("index-template");
 		CharBuffer buffer = CharBuffer.allocate(16384);
 		reader.read(buffer);
@@ -119,6 +128,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		index = index.replaceAll("\\{\\{ token \\}\\}", token);
 		index = index.replaceAll("\\{\\{ me \\}\\}", user);
 		index = index.replaceAll("\\{\\{ pc_config \\}\\}", pc_config);
+		index = index.replaceAll("\\{\\{ lst_user \\}\\}", lst_user);
 		resp.setContentType("text/html");
 		resp.getWriter().write(index);
 
