@@ -1,7 +1,6 @@
 package dcn.ssu.ac.kr;
 
 import java.io.IOException;
-import java.util.ArrayList;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -12,6 +11,7 @@ import com.google.appengine.api.channel.ChannelPresence;
 import com.google.appengine.api.channel.ChannelService;
 import com.google.appengine.api.channel.ChannelServiceFactory;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.EmbeddedEntity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.datastore.Entity;
@@ -28,18 +28,22 @@ public class DisconnectServlet  extends HttpServlet{
 
 		try {
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", room_key));
-			String user1 = (String)room.getProperty("user1");
-			String user2 = (String)room.getProperty("user2");
+			String user1 = (String)((EmbeddedEntity) room.getProperty("user1")).getProperty("name");
+			String user2 = (String)((EmbeddedEntity) room.getProperty("user2")).getProperty("name");
 			if(user1.equals(user) || user2.equals(user)) {
-				ArrayList<String> otherUser = RoomManagement.getOtherUser(room, user);
+				String otherUser = (String)RoomManagement.getOtherUser(room, user).getProperty("name");
 				RoomManagement.removeUser(room, user);
+				System.out.println("User " + user + " removed from room " + room_key);
+				
 				if(otherUser != null) {
-					for(String u : otherUser)
-					channelService.sendMessage(new ChannelMessage(room.getKey().getName() + "/" + u, "BYE"));
+					channelService.sendMessage(new ChannelMessage(MessageManagement.makeToken(room, otherUser), "BYE"));
+					System.out.println("Sent BYE to " + otherUser);
 				}
 			}
 		} catch (EntityNotFoundException e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		System.out.println("User " + user + " disconnected from room " + room_key);
 	}
 }

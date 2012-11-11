@@ -3,7 +3,6 @@ package dcn.ssu.ac.kr;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.CharBuffer;
-import java.util.ArrayList;
 import java.util.Random;
 
 import javax.servlet.http.*;
@@ -17,6 +16,7 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.labs.repackaged.org.json.JSONObject;
 
 
 @SuppressWarnings("serial")
@@ -31,12 +31,20 @@ public class RTCWebDCNServlet extends HttpServlet {
 		return word;
 	}
 	
-	private String make_pc_config(String stunServer) {
+	private String make_pc_config(String stunServer, String turnServer) {
+		String server = "";
+		String stun_config = "", turn_config = "";
 		if(stunServer != null) {
-			return "STUN " + stunServer;
+			stun_config = "stun:" + stunServer;
 		} else {
-			return "STUN stun.l.google.com:19302";
+			stun_config = "stun:" + "stun.l.google.com:19302";
 		}
+		server = "{\'url\':stun_config}";
+		if(turnServer != null) {
+			turn_config = "turn:" + turnServer;
+			server += "{\'url\':" + turn_config + ", \'credential\':\'\'}";
+		}
+		return "{\'iceServers\':" + server + "}";
 	}
 	
 	DatastoreService dataStore = DatastoreServiceFactory.getDatastoreService();
@@ -46,6 +54,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		String debug = req.getParameter("debug");
 		debug = "true";
 		String stunServer = req.getParameter("ss");
+		String turnServer = req.getParameter("ts");
 		if(room_key == null) {
 			room_key = get_random(8);
 			String str = "/?r=" + room_key;
@@ -53,6 +62,9 @@ public class RTCWebDCNServlet extends HttpServlet {
 			if(debug != null) {
 				str += ("&debug=" + debug);
 			}
+			if(turnServer != null) {
+				str += "&ts=" + turnServer;
+			}			
 			if(stunServer != null) {
 				str += "&ss=" + stunServer;
 			}
@@ -63,10 +75,10 @@ public class RTCWebDCNServlet extends HttpServlet {
 		String user = null;
 		Integer initiator = 0;
 		
-		Entity room = null;
+		Entity room;
 		try {
 			room = dataStore.get(KeyFactory.createKey("Room", room_key));
-			if(!debug.equals("full")) {
+			if(RoomManagement.getOccupancy(room) == 1 && !debug.equals("full")) {
 				user = get_random(8);
 				RoomManagement.addUser(room, user);
 				initiator = 1;
@@ -84,13 +96,12 @@ public class RTCWebDCNServlet extends HttpServlet {
 			if(!debug.equals("full")) {
 				user = get_random(8);
 				room = new Entity("Room", room_key);
-				room.setProperty("NoU", "0");
 				RoomManagement.addUser(room, user);
 				if(!debug.equals("loopback")) {
 					initiator = 0;
 				} else {
 					RoomManagement.addUser(room, user);
-					initiator = 0;
+					initiator = 1;
 				}
 					
 			}
@@ -102,22 +113,18 @@ public class RTCWebDCNServlet extends HttpServlet {
 		if(debug != null) {
 			room_link += ("&debug=" + debug);
 		}
+		
+		if(turnServer != null) {
+			room_link += "&ts=" + turnServer;
+		}
+		
 		if(stunServer != null) {
 			room_link += "&ss=" + stunServer;
 		}
 		
 		ChannelService channelService = ChannelServiceFactory.getChannelService();
 		String token = channelService.createChannel(room_key + "/" + user);
-		String pc_config = make_pc_config(stunServer);
-		String lst_user = "";
-		ArrayList<String> otherUser = RoomManagement.getOtherUser(room, user);
-		for(int i = 0; i < otherUser.size(); i++){
-			if(otherUser.get(i) != null){
-				lst_user += otherUser.get(i);
-				if( (i + 1) < otherUser.size())
-					lst_user+= " ";
-			}
-		}
+		String pc_config = make_pc_config(stunServer, turnServer);
 		FileReader reader = new FileReader("index-template");
 		CharBuffer buffer = CharBuffer.allocate(16384);
 		reader.read(buffer);
@@ -128,7 +135,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		index = index.replaceAll("\\{\\{ token \\}\\}", token);
 		index = index.replaceAll("\\{\\{ me \\}\\}", user);
 		index = index.replaceAll("\\{\\{ pc_config \\}\\}", pc_config);
-		index = index.replaceAll("\\{\\{ lst_user \\}\\}", lst_user);
+
 		resp.setContentType("text/html");
 		resp.getWriter().write(index);
 
