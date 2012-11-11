@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -18,6 +20,7 @@ import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.labs.repackaged.org.json.JSONException;
 import com.google.appengine.labs.repackaged.org.json.JSONObject;
+import com.sun.xml.internal.ws.resources.HttpserverMessages;
 
 
 @SuppressWarnings("serial")
@@ -28,7 +31,11 @@ public class MessageServlet extends HttpServlet{
 		if(RoomManagement.isConnected(room, userName)) {
 			ChannelService channelService = ChannelServiceFactory.getChannelService();
 			channelService.sendMessage(new ChannelMessage(token, message));
-			System.out.println("Delivered message to " + token);
+			/*
+			 * send to default gateway
+			 */
+//			String gatewayToken = MessageManagement.makeToken(room, GlobalConstant.GatewayID);
+//			channelService.sendMessage(new ChannelMessage(gatewayToken, message));
 		} else {
 			DatastoreServiceFactory.getDatastoreService().put( new Entity(token, message));
 		}
@@ -63,7 +70,7 @@ public class MessageServlet extends HttpServlet{
 		}
 		String message = stringBuilder.toString();
 		String room_key = req.getParameter("r");
-		
+		System.out.println(message);
 		
 		try {
 			JSONObject jsonMessage = new JSONObject(message);
@@ -71,10 +78,8 @@ public class MessageServlet extends HttpServlet{
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", room_key));
 			String user = req.getParameter("u");
 			String otherUser = (String)RoomManagement.getOtherUser(room, user).getProperty("name");
-			System.out.println("User: " + user + " Other User: " + otherUser);
 			if(jsonMessage.get("type").equals("bye")) {
 				RoomManagement.removeUser(room, user);
-				System.out.println("User " + user + " quit from room " + room_key);
 			}
 			
 			if(otherUser != null) {

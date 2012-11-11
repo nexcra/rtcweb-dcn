@@ -48,12 +48,7 @@ public class MessageManagement {
 		ArrayList<Entity> arrEntities = MessageManagement.getSavedMessage(_token);
 		for(Entity e : arrEntities) {
 			e.setProperty("msg", null);
-			System.out.println("Deleted the saved message for " + _token);
 		}
-		
-	}
-	
-	public static void onMessage(String room, String user, String message) {
 		
 	}
 	
