@@ -1,7 +1,12 @@
 package dcn.ssu.ac.kr;
 
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.nio.CharBuffer;
 import java.util.Random;
 
@@ -28,6 +33,9 @@ public class RTCWebDCNServlet extends HttpServlet {
 		for(int i = 0; i < len; i ++) {
 			word += Integer.toString(r.nextInt(10));
 		}
+		while(word.equals(GlobalConstant.GatewayID)) {
+			get_random(len);
+		}
 		return word;
 	}
 	
@@ -47,6 +55,28 @@ public class RTCWebDCNServlet extends HttpServlet {
 		return "{\'iceServers\':" + server + "}";
 	}
 	
+	private void sendChannelIdToGateway(String token) {
+		  Socket clientSocket;
+		try {
+			clientSocket = new Socket("localhost", GlobalConstant.GatewayListeningPort);
+			  DataOutputStream outToServer = new DataOutputStream(clientSocket.getOutputStream());
+			  outToServer.writeBytes(token + '\n');
+			  clientSocket.close();
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public void makeGatewayChannel(String clientId) {
+		ChannelService channelService = ChannelServiceFactory.getChannelService();
+		String token = channelService.createChannel(clientId);
+		System.out.println(token);
+		sendChannelIdToGateway(token);
+	}
+	
 	DatastoreService dataStore = DatastoreServiceFactory.getDatastoreService();
 	public void doGet(HttpServletRequest req, HttpServletResponse resp)
 			throws IOException {
@@ -57,6 +87,7 @@ public class RTCWebDCNServlet extends HttpServlet {
 		String turnServer = req.getParameter("ts");
 		if(room_key == null) {
 			room_key = get_random(8);
+
 			String str = "/?r=" + room_key;
 
 			if(debug != null) {
@@ -80,32 +111,32 @@ public class RTCWebDCNServlet extends HttpServlet {
 			room = dataStore.get(KeyFactory.createKey("Room", room_key));
 			if(RoomManagement.getOccupancy(room) == 1 && !debug.equals("full")) {
 				user = get_random(8);
+				//				user = GlobalConstant.GatewayID;
 				RoomManagement.addUser(room, user);
 				initiator = 1;
-		} else {
-			FileReader reader = new FileReader("full-template");
-			CharBuffer buffer = CharBuffer.allocate(16384);
-			reader.read(buffer);
-			String index = new String(buffer.array());
-			index = index.replaceAll("\\{\\{ room_key \\}\\}", room_key);
-			resp.setContentType("text/html");
-			resp.getWriter().write(index);
-			return;
-		}
+			} else {
+				FileReader reader = new FileReader("full-template");
+				CharBuffer buffer = CharBuffer.allocate(16384);
+				reader.read(buffer);
+				String index = new String(buffer.array());
+				index = index.replaceAll("\\{\\{ room_key \\}\\}", room_key);
+				resp.setContentType("text/html");
+				resp.getWriter().write(index);
+				reader.close();
+				return;
+			}
 		} catch (EntityNotFoundException e) {
 			if(!debug.equals("full")) {
-				user = get_random(8);
 				room = new Entity("Room", room_key);
+				
+				RoomManagement.addUser(room, GlobalConstant.GatewayID);
+				RoomManagement.setConnected(room, GlobalConstant.GatewayID);
+				MessageManagement.sendSavedMessage(MessageManagement.makeToken(room, GlobalConstant.GatewayID));
+				
+				user = get_random(8);
 				RoomManagement.addUser(room, user);
-				if(!debug.equals("loopback")) {
-					initiator = 0;
-				} else {
-					RoomManagement.addUser(room, user);
-					initiator = 1;
-				}
-					
+				initiator = 1;
 			}
-			
 		}
 		
 		
@@ -123,6 +154,10 @@ public class RTCWebDCNServlet extends HttpServlet {
 		}
 		
 		ChannelService channelService = ChannelServiceFactory.getChannelService();
+		
+		//send a channel id to gateway
+		makeGatewayChannel(room_key + "/" + GlobalConstant.GatewayID);
+		
 		String token = channelService.createChannel(room_key + "/" + user);
 		String pc_config = make_pc_config(stunServer, turnServer);
 		FileReader reader = new FileReader("index-template");
@@ -138,7 +173,9 @@ public class RTCWebDCNServlet extends HttpServlet {
 
 		resp.setContentType("text/html");
 		resp.getWriter().write(index);
-
+		reader.close();
+		
+		
 	}
 	
 	

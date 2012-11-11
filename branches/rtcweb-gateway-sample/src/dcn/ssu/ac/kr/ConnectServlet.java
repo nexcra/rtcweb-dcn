@@ -22,14 +22,15 @@ public class ConnectServlet  extends HttpServlet{
 		ChannelPresence presence = channelService.parsePresence(req);
 		String key = presence.clientId();
 		String str[] = key.split("/");
-		System.out.println("User " + str[1] + " connected to room " + str[0]);
+//		System.out.println("User " + str[1] + " connected to room " + str[0]);
 		try {
 			Entity room = DatastoreServiceFactory.getDatastoreService().get(KeyFactory.createKey("Room", str[0]));
+			if(RoomManagement.hasUser(room, str[1]))
 			RoomManagement.setConnected(room, str[1]);
 			MessageManagement.sendSavedMessage(MessageManagement.makeToken(room, str[1]));
 		} catch (EntityNotFoundException e) {
 			// TODO Auto-generated catch block
-			System.out.println("ConnectServlet - EntityNotFound:" + e.getMessage());
+//			System.out.println("ConnectServlet - EntityNotFound:" + e.getMessage());
 		}
 		
 	}

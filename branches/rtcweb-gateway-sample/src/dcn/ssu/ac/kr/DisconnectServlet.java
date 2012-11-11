@@ -33,17 +33,14 @@ public class DisconnectServlet  extends HttpServlet{
 			if(user1.equals(user) || user2.equals(user)) {
 				String otherUser = (String)RoomManagement.getOtherUser(room, user).getProperty("name");
 				RoomManagement.removeUser(room, user);
-				System.out.println("User " + user + " removed from room " + room_key);
-				
 				if(otherUser != null) {
 					channelService.sendMessage(new ChannelMessage(MessageManagement.makeToken(room, otherUser), "BYE"));
-					System.out.println("Sent BYE to " + otherUser);
 				}
 			}
 		} catch (EntityNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		System.out.println("User " + user + " disconnected from room " + room_key);
+//		System.out.println("User " + user + " disconnected from room " + room_key);
 	}
 }
