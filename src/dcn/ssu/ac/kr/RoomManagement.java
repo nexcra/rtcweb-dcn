@@ -5,7 +5,25 @@ import com.google.appengine.api.datastore.EmbeddedEntity;
 import com.google.appengine.api.datastore.Entity;
 
 public class RoomManagement {
-	
+		
+		public static boolean hasUser(Entity room, String userName) {
+		EmbeddedEntity user1 = (EmbeddedEntity) room.getProperty("user1");
+		EmbeddedEntity user2 = (EmbeddedEntity) room.getProperty("user2");
+		
+		String name1 = "", name2 = "";
+		if(user1 != null) {
+			name1 = (String) user1.getProperty("name");
+			if(name1.equals(userName))
+				return true;
+		}
+		
+		if(user2 != null) {
+			name2 = (String) user2.getProperty("name");
+			if(name2.equals(userName))
+				return true;
+		}
+		return false;
+	}
 	
 	public static EmbeddedEntity getOtherUser(Entity room, String userName) {
 		
